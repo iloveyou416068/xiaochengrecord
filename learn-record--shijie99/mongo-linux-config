@@ -1,0 +1,216 @@
+mongo-linux-config
+
+
+
+
+//////////////////////////////////////////////////////
+hosts文件，看是否有服务器IP地址对应的主机名
+1.more /etc/hosts:  hostname和/etc/sysconfig/network
+service network restart
+ (本质是/etc/init.d/network)
+
+查看nscd是否启用：
+ ps -ef|grep nscd
+ 直接关闭Linux nscd 缓存服务：
+
+/etc/init.d/nscd stop
+
+ linux本身是没有dns缓存的,想使用dns缓存的话需要自己安装一个服务程序NSCD(name service cache daemon).
+
+    nscd缓存三种服务passwd group hosts，所以它会记录三个库，分别对应源/etc/passwd, /etc/hosts 和 /etc/resolv.conf每个库保存两份缓存，一份是找到记录的，一份是没有找到记录的。每一种缓存都保存有生存时间（TTL）.
+
+     安装：
+
+　 yum install nscd
+
+    修改配置文件/etc/nscd.conf,开启dns缓存,修改这一行
+
+　 enable-cache hosts yes。
+
+如果启用了nscd 服务，才有dns 缓存，否则是没有dns缓存的。
+
+
+
+
+     开启 、停止、 重启服务
+     service nscd start | stop | restart
+
+nscd的配置：
+
+通过编辑/etc/nscd.conf文件，在其中增加如下一行可以开启本地DNS cache：
+
+enable-cache hosts yes
+
+阿里云主机上的配置如下：
+
+[plain] view plain copy print?
+[root@iZ2571ykq ~]# cat /etc/nscd.conf   
+#logfile        /var/log/nscd.log  
+threads         6  
+max-threads     128  
+server-user     nscd  
+debug-level     5  
+paranoia        no  
+enable-cache    passwd      no  
+enable-cache    group       no  
+enable-cache    hosts       yes  
+positive-time-to-live   hosts   5  
+negative-time-to-live   hosts       20  
+suggested-size  hosts       211  
+check-files     hosts       yes  
+persistent      hosts       yes  
+shared          hosts       yes  
+max-db-size     hosts       33554432  
+相关参数的解释如下：
+
+logfile debug-file-name：指定调试信息写入的文件名。
+
+debug-level value：设置希望的调试级别。
+
+threads number：这是启动的等待请求的线程数。最少将创建5个线程。
+
+server-user user：如果设置了该选项，nscd将作为该用户运行，而不是作为root。如果每个用户都使用一个单独的缓存（-S参数），将忽略该选项
+
+enable-cache service <yes|no>：启用或禁用制定的 服务 缓存。
+
+positive-time-to-live service value：设置 service 在指定缓存中正的项目（成功的请求）的TTL（存活时间）。 Value 以秒为单位。较大的值将增加缓存命中率从而减低平均响应时间，但是将增加缓存的一致性问题。
+
+negative-time-to-live service value：设置 service 在指定缓存中负的项目（失败的请求）的TTL（存活时间）。 Value 以秒为单位。如果存在由不在系统数据库中的uid（用户ID）（例如在以root身份解包linux 内核源代码时）所拥有的文件将明显改善性能；应该维持较小的值以降低缓存一致性问题。
+
+suggested-size service value：这是内部散列表的大小， value 应该保持一个素数以达到优化效果。
+
+check-files service <yes|no>：启用或禁用检查属于指定 服务 的文件的改变。这些文件是 /etc/passwd， /etc/group， 以及/etc/hosts。
+
+
+
+
+
+
+
+nscd的查看和清除
+
+
+
+
+nscd缓存DB文件在/var/db/nscd下。
+nscd -g  查看统计信息
+
+清除 nscd缓存：
+nscd -i passwd
+nscd -i group
+nscd -i hosts
+当然也先删除缓存库或者停掉nscd服务：
+rm -f /var/db/nscd/hosts
+
+service nscd restart
+
+或者是直接停止nscd 服务 
+service nscd stop。
+
+ 	
+
+
+如果在运行时解决这问题，也不困难，只需要修改hugepage的设置就可以了。执行下面两条命令
+
+
+临时更正
+echo never >>  /sys/kernel/mm/transparent_hugepage/enabled
+echo never >>  /sys/kernel/mm/transparent_hugepage/defrag
+
+
+mongoDB 禁用大内存页面 transparent_hugepage=never
+最近在学mongoDB，安装倒没什么困难，有yum仓库。不过接入ctl后的一条warning倒挺让人烦心的。
+
+2015-03-22T09:27:00.222+0800 I CONTROL  [initandlisten] ** WARNING: /sys/kernel/mm/transparent_hugepage/defrag is 'always'.
+2015-03-22T09:27:00.222+0800 I CONTROL  [initandlisten] **        We suggest setting it to 'never'
+如果在运行时解决这问题，也不困难，只需要修改hugepage的设置就可以了。执行下面两条命令
+
+echo never >>  /sys/kernel/mm/transparent_hugepage/enabled
+echo never >>  /sys/kernel/mm/transparent_hugepage/defrag
+别忘了重启你的mongoDB，这条warning就消失了。不过下次重新启动系统，这些设置就会消失。
+
+不过想在启动时关掉大内存页面就废了我不少时间了。
+
+首先是网上有人说，把上面的两行命令写入/etc/rc.local，如果是fedora21这样新的系统，应该就是/etc/rc.d/rc.local。不过这无济于事。
+
+我们先看看官方文档怎么说。https://www.kernel.org/doc/Documentation/vm/transhuge.txt 这是关于大内存页面的linux内核文档说明，里面是这样描述如何关闭的。
+
+== Boot parameter ==
+ 
+You can change the sysfs boot time defaults of Transparent Hugepage
+Support by passing the parameter "transparent_hugepage=always" or
+"transparent_hugepage=madvise" or "transparent_hugepage=never"
+(without "") to the kernel command line.
+它说要把 transparent_hugepage=never 这个参数写入 内核命令行（kernel command line）。不过这个内核命令行又在哪里呢。于是继续找，发现了红帽公司的一份补充说明 https://access.redhat.com/solutions/46111 ， 里面是这样描述的。
+
+
+To disable THP at boot time
+ 
+Append the following to the kernel command line in grub.conf:
+ 
+transparent_hugepage=never
+grub --version 版本号
+好了，离真相又更近一步了，不过我的是grub2，所以这篇文章所描述的grub.conf并不存在。继续找，发现了这两篇文章 https://lists.fedoraproject.org/pipermail/users/2012-January/412889.html 跟 http://docs.mongodb.org/manual/reference/transparent-huge-pages/ （mongoDB的官方文档）。这两篇终于看见光明了，为什么我一开始没翻到mongodb的官方文档？果断投诉google，你家的搜索不靠谱啊。前面一篇基本上是正确的，不过下面的命令写错了
+
+grub2-mkconfig /boot/grub2/grub.cfg
+应该是
+grub2-mkconfig -o /boot/grub2/grub.cfg
+不过mongodb的官方文档还留下了这么一句话
+
+See your operating system’s documentation for details on the precise location of the grub-legacy or grub2 configuration file.
+所以为了保险起见，我还是认真研读了 http://docs.fedoraproject.org/en-US/Fedora/21/html/System_Administrators_Guide/sec-GRUB_2_over_Serial_Console.html#sec-Configuring_GRUB_2 以防万一。
+
+终于在折腾了一个晚上之后，搞定了。如果你也是grub2的linux系统，请通过以下步骤关闭大内存页面。
+
+step1 编辑 /etc/default/grub，在GRUB_CMDLINE_LINUX加入选项 transparent_hugepage=never
+
+
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+GRUB_DEFAULT=saved
+GRUB_DISABLE_SUBMENU=true
+GRUB_TERMINAL_OUTPUT="console"
+GRUB_CMDLINE_LINUX="rd.lvm.lv=fedora/swap rd.lvm.lv=fedora/root rhgb quiet transparent_hugepage=never"
+GRUB_DISABLE_RECOVERY="true"
+step2 重新生成grub配置文件
+
+
+On BIOS-based machines, issue the following command as root:
+~]# grub2-mkconfig -o /boot/grub2/grub.cfg
+On UEFI-based machines, issue the following command as root:
+~]# grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg
+step3 重启你的系统
+
+至此大功告成，如果你使用的是grub，请把选项写入grub.conf文件就好了。
+
+查询hugepage状态，第一种方式
+
+[root@localhost yucanlin]# cat /sys/kernel/mm/transparent_hugepage/enabled 
+always madvise [never]
+[root@localhost yucanlin]# cat /sys/kernel/mm/transparent_hugepage/defrag 
+always madvise [never]
+never就对了。
+
+第二种方式
+
+[yucanlin@localhost ~]$ grep Huge /proc/meminfo
+AnonHugePages:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+0就对了。
+
+不过有个小遗憾，重启后我发现 enabled 是never，但defrag却依然是always，不过经过查询meminfo，大内存页面是被禁用了。就不去管他了。
+
+Check system-wide THP usage
+grep AnonHugePages /proc/meminfo
+Red Hat Enterprise Linux 6.2 or later publishes additional THP monitoring via /proc/vmstat:
+egrep 'trans|thp' /proc/vmstat
+
+
+Check THP usage per process
+Run the following command to monitor which processes are using THP:
+查看大内存占用情况:
+grep -e AnonHugePages  /proc/*/smaps | awk  '{ if($2>4) print $0} ' |  awk -F "/"  '{print $0; system("ps -fp " $3)} '

@@ -1,0 +1,1 @@
+/data/mongodb/bin/mongod --shardsvr --replSet shard2 --port 22002 --dbpath /data/shard/s1 --logpath /data/shard/log/shard2.log --fork --nojournal --oplogSize 10 --keyFile /data/key/r1 --profile=1 --slowms=100

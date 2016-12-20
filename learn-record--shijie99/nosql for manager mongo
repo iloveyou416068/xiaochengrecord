@@ -1,0 +1,15 @@
+删除这两个地方的东西就好了
+运行 -->regedit 
+HKEY_CURRENT_USER\Software\NoSQL Manager Group
+
+删除该文件夹
+C:\ProgramData\NoSQL Manager Group
+
+NoSQL Manager for Cassand
+重启，继续免费试用30天
+
+MongoVUE 是个比较好用的MongoDB客户端，不过免费版在15天过后，不能使用gridfs，Server Monitoring等功能。
+
+使用Process Monitor工具，监视注册表，可以发现MongoVUE 在启动时会读取以下的注册表项：
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{B1159E65-821C3-21C5-CE21-34A484D54444}\4FF78130]
+把这个项下的值全删掉就可以了。

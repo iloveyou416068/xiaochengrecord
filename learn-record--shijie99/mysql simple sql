@@ -1,0 +1,395 @@
+mysql simple sql
+SELECT EMP_NOW_JOB,EMP_LEVEL,EMP_NOW_DEPT  FROM `hr_employee`   WHERE EMP_WORK_STATE='work' AND EMP_LEVEL not in ( 'H' )  group by a.EMP_LEVEL ;
+
+
+
+-- Procedure "proc_data_8days" DDL
+
+CREATE DEFINER=`axehotel`@`%` PROCEDURE `proc_data_8days`()
+begin
+
+declare beginData varchar(20);
+
+declare endDate date;
+
+declare insertSql varchar(500);
+
+declare i int default 1;
+
+declare k int default 0;
+
+set beginData=DATE_FORMAT(date_sub(now(),interval 8 day),'%Y-%m-%d');
+
+set endDate=DATE_FORMAT(now(),'%Y-%m-%d');
+
+set @now=now();
+
+
+
+
+
+
+
+drop table if exists tmpDate_wlk;
+
+create table tmpDate_wlk(dates char(10),hours char(2)) engine=innodb default charset=utf8;
+
+
+
+while i<9 do
+
+
+
+set insertSql=concat('insert into tmpDate_wlk'," select date_add('",beginData,"',interval ",i,' day),');
+
+
+
+
+
+while k<24 do
+
+
+
+if k<10 then
+
+set @t=concat(insertSql,"'0",k,"'");
+
+else
+
+set @t=concat(insertSql,k);
+
+end if;
+
+prepare stmt from @t;
+
+execute stmt;
+
+deallocate prepare stmt;
+
+set k=k+1;
+
+
+
+end while;
+
+set k=0;
+
+set i=i+1;
+
+
+
+end while;
+
+
+
+set @hours=cast(hour(now()) as signed);
+
+
+
+
+
+
+
+
+
+drop view if exists order_view;
+
+
+
+create view order_view as select a.*,(case when a.cid='ctrp' then 'ctrip' when cid='xtrip' then 'tongye' else 'qunar' end) as qudao from `order` a;
+
+
+
+
+
+
+
+
+
+drop table if exists result_8days;
+
+
+
+create table result_8days as 
+
+select  
+
+fullrow.dates,fullrow.hours,fullrow.qudao,fullrow.cid,fullrow.ds,@now uptime,
+
+jy.jyzs jiaoyan,jy.jysb jiaoyanFaild,vorder.xiadan,vorder.xiadanFaild,vorder.peopleNum,vorder.jianyeNum,
+
+vorder.pay1,vorder.pay2,round(vorder.pay1-vorder.pay2,2) jiajianjia,
+
+round((vorder.pay1-vorder.pay2)/vorder.jianyeNum,2) jianyejiajianjia,
+
+round((vorder.pay1-vorder.pay2)*100/vorder.pay1,2) jiajianjiazhanbi
+
+
+
+from
+
+	(SELECT dates,hours,channelcode qudao,cid,`code` ds
+
+	from tmpdate_wlk 
+
+	join (select `code` from order_statistics_vendor where used=1) vendor
+
+	join (select cid,channelcode from order_statistics_cid where used=1) channel) fullrow 
+
+left join
+
+	(select 
+
+		DATE_FORMAT(a.orderDate,'%Y-%m-%d-%H') dates,
+
+		qudao,cid,ds,
+
+		sum(if(a.statusCode in(7,12),1,0))+sum(if(a.statusMsg in ('预订失败','预订失败，担保撤消成功'),1,0)) xiadan,
+
+		sum(if(a.statusMsg in ('预订失败','预订失败，担保撤消成功'),1,0)) xiadanFaild,
+
+		0 peopleNum,
+
+		sum(if(a.statusCode in(7,12),a.roomnum*datediff(a.checkOutDate,a.checkInDate),0)) jianyeNum,
+
+		round(sum(if(a.statusCode in(7,12),ifnull(a.routeprice,0)*routeJsrate2Cny,0)),2) pay1,
+
+		round(sum(if(a.statusCode in(7,12),  a.bookingPrice*a.dsJsrate2Cny,0)),2) pay2
+
+	from order_view a
+
+	where
+
+		a.orderDate>=beginData and date(a.orderDate)<=endDate and a.orderDate<=@now
+
+	group by DATE_FORMAT(a.orderDate,'%Y-%m-%d-%H'),a.qudao,a.cid,a.ds) vorder
+
+	on concat_ws('-',fullrow.dates,fullrow.hours)=vorder.dates 
+
+		and fullrow.qudao=vorder.qudao and fullrow.cid=vorder.cid and fullrow.ds=vorder.ds 
+
+left join
+
+	(
+
+	SELECT date dates,channel qudao,cid,ds,`hour` hours,count(1) jyzs,sum(if(issuccess=0,1,0)) jysb
+
+	FROM order_statistics_check
+
+	
+
+	GROUP BY date,channel,cid,ds,`hour`
+
+	) jy
+
+	on fullrow.dates=jy.dates and fullrow.hours=jy.hours and fullrow.qudao=jy.qudao and fullrow.cid=jy.cid and fullrow.ds=jy.ds;
+
+
+
+
+
+/*
+
+CREATE TABLE  if not exists result_8days_history(
+
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+
+  `dates` varchar(13) DEFAULT NULL,
+
+  `hours` char(2) DEFAULT NULL,
+
+  `jiaoyan` decimal(23,0) DEFAULT NULL,
+
+  `jiaoyanFaild` decimal(24,0) DEFAULT NULL,
+
+  `xiadan` decimal(24,0) DEFAULT NULL,
+
+  `xiadanFaild` decimal(23,0) DEFAULT NULL,
+
+  `peopleNum` decimal(32,0) DEFAULT NULL,
+
+  `jianyeNum` decimal(38,0) DEFAULT NULL,
+
+  `pay1` double(19,2) DEFAULT NULL,
+
+  `pay2` double(19,2) DEFAULT NULL,
+
+  `jiajianjia` double(19,2) DEFAULT NULL,
+
+  `jianyejiajianjia` double(19,2) DEFAULT NULL,
+
+  `jiajianjiazhanbi` varbinary(20) DEFAULT NULL,
+
+  `qudao` varchar(5) DEFAULT '',
+
+  `cid` varchar(30) DEFAULT NULL COMMENT '渠道id',
+
+  `ds` varchar(128) DEFAULT NULL,
+
+  `uptime` datetime DEFAULT NULL,
+
+  PRIMARY KEY (`id`)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+
+insert into result_8days_history(dates,hours,jiaoyan,jiaoyanFaild,xiadan,xiadanFaild,peopleNum,jianyeNum,pay1,pay2,jiajianjia,jianyejiajianjia,jiajianjiazhanbi,qudao,cid,ds,uptime) select * from result_8days;  
+
+*/
+
+
+
+
+
+
+
+drop table if exists result_avg_8days;
+
+create table result_avg_8days as select a.hours,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyan as signed))/8,sum(cast(a.jiaoyan as signed))/7),2) avg_jiaoyan,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyanFaild as signed))/8,sum(cast(a.jiaoyanFaild as signed))/7),2) avg_jiaoyanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadan as signed))/8,sum(cast(a.xiadan as signed))/7),2) avg_xiadan,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadanFaild as signed))/8,sum(cast(a.xiadanFaild as signed))/7),2) avg_xiadanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.peopleNum as signed))/8,sum(cast(a.peopleNum as signed))/7),2) avg_peopleNum,
+
+round(if(@hours>=a.hours,sum(cast(a.jianyeNum as signed))/8,sum(cast(a.jianyeNum as signed))/7),2) avg_jianyeNum,
+
+round(if(@hours>=a.hours,sum(cast(a.pay1 as signed))/8,sum(cast(a.pay1 as signed))/7),2) avg_pay1,
+
+@now uptime
+
+from result_8days a group by a.hours;
+
+
+
+
+
+/*
+
+CREATE TABLE if not exists result_avg_8days_history(
+
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+
+  `hours` varchar(2) DEFAULT NULL,
+
+  `avg_jiaoyan` decimal(48,2) DEFAULT NULL,
+
+  `avg_jiaoyanFaild` decimal(48,2) DEFAULT NULL,
+
+  `avg_xiadan` decimal(49,2) DEFAULT NULL,
+
+  `avg_xiadanFaild` decimal(48,2) DEFAULT NULL,
+
+  `avg_peopleNum` decimal(57,2) DEFAULT NULL,
+
+  `avg_jianyeNum` decimal(63,2) DEFAULT NULL,
+
+  `avg_pay1` decimal(44,2) DEFAULT NULL,
+
+  `uptime` datetime DEFAULT NULL,
+
+  PRIMARY KEY (`id`)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+
+insert into result_avg_8days_history(hours,avg_jiaoyan,avg_jiaoyanFaild,avg_xiadan,avg_xiadanFaild,avg_peopleNum,avg_jianyeNum,avg_pay1,uptime) select * from result_avg_8days;   
+
+*/
+
+
+
+
+
+drop table if exists result_avg_qunar_8days;
+
+create table result_avg_qunar_8days as select a.hours,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyan as signed))/8,sum(cast(a.jiaoyan as signed))/7),2) avg_jiaoyan,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyanFaild as signed))/8,sum(cast(a.jiaoyanFaild as signed))/7),2) avg_jiaoyanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadan as signed))/8,sum(cast(a.xiadan as signed))/7),2) avg_xiadan,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadanFaild as signed))/8,sum(cast(a.xiadanFaild as signed))/7),2) avg_xiadanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.peopleNum as signed))/8,sum(cast(a.peopleNum as signed))/7),2) avg_peopleNum,
+
+round(if(@hours>=a.hours,sum(cast(a.jianyeNum as signed))/8,sum(cast(a.jianyeNum as signed))/7),2) avg_jianyeNum,
+
+round(if(@hours>=a.hours,sum(cast(a.pay1 as signed))/8,sum(cast(a.pay1 as signed))/7),2) avg_pay1,
+
+@now uptime
+
+from result_8days a
+
+where a.qudao='qunar' group by a.hours;
+
+
+
+
+
+
+
+
+
+drop table if exists result_avg_ctrp_8days;
+
+create table result_avg_ctrp_8days as select a.hours,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyan as signed))/8,sum(cast(a.jiaoyan as signed))/7),2) avg_jiaoyan,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyanFaild as signed))/8,sum(cast(a.jiaoyanFaild as signed))/7),2) avg_jiaoyanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadan as signed))/8,sum(cast(a.xiadan as signed))/7),2) avg_xiadan,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadanFaild as signed))/8,sum(cast(a.xiadanFaild as signed))/7),2) avg_xiadanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.peopleNum as signed))/8,sum(cast(a.peopleNum as signed))/7),2) avg_peopleNum,
+
+round(if(@hours>=a.hours,sum(cast(a.jianyeNum as signed))/8,sum(cast(a.jianyeNum as signed))/7),2) avg_jianyeNum,
+
+round(if(@hours>=a.hours,sum(cast(a.pay1 as signed))/8,sum(cast(a.pay1 as signed))/7),2) avg_pay1,
+
+@now uptime
+
+from result_8days a
+
+where a.qudao='ctrip' group by a.hours;
+
+
+
+
+
+drop table if exists result_avg_xtrip_8days;
+
+create table result_avg_xtrip_8days as select a.hours,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyan as signed))/8,sum(cast(a.jiaoyan as signed))/7),2) avg_jiaoyan,
+
+round(if(@hours>=a.hours,sum(cast(a.jiaoyanFaild as signed))/8,sum(cast(a.jiaoyanFaild as signed))/7),2) avg_jiaoyanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadan as signed))/8,sum(cast(a.xiadan as signed))/7),2) avg_xiadan,
+
+round(if(@hours>=a.hours,sum(cast(a.xiadanFaild as signed))/8,sum(cast(a.xiadanFaild as signed))/7),2) avg_xiadanFaild,
+
+round(if(@hours>=a.hours,sum(cast(a.peopleNum as signed))/8,sum(cast(a.peopleNum as signed))/7),2) avg_peopleNum,
+
+round(if(@hours>=a.hours,sum(cast(a.jianyeNum as signed))/8,sum(cast(a.jianyeNum as signed))/7),2) avg_jianyeNum,
+
+round(if(@hours>=a.hours,sum(cast(a.pay1 as signed))/8,sum(cast(a.pay1 as signed))/7),2) avg_pay1,
+
+@now uptime
+
+from result_8days a
+
+where a.qudao='tongye' group by a.hours;
+
+end;

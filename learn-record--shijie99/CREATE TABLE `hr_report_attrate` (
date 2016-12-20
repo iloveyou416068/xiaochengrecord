@@ -1,0 +1,81 @@
+CREATE TABLE `hr_report_attrate` (
+  `ID` int auto_increment,
+  `GRP_ID` varchar(36) NOT NULL DEFAULT '',
+  `GRP_NAME` varchar(32) DEFAULT NULL,
+  `REPORT_DATE` date DEFAULT NULL,
+  `REPORT_WEEK_DAY` char(5) DEFAULT NULL,
+  `ATTENDANCE_NUM` smallint(5) unsigned DEFAULT NULL,
+  `REAL_ATTENDANCE` smallint(5) unsigned DEFAULT NULL,
+  `RATE` double(5,2) unsigned DEFAULT NULL,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `hr_report_record` (
+  `ID` int(11) NOT NULL AUTO_INCREMENT,
+  `report_key` varchar(36) NOT NULL DEFAULT '',
+  `report_value` varchar(32) DEFAULT NULL,
+  `report_res` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+CREATE TABLE `hr_report_attrate` (
+  `ID` int auto_increment,
+  `GRP_ID` varchar(36) NOT NULL DEFAULT '',
+  `GRP_NAME` varchar(32) DEFAULT NULL,
+  `REPORT_DATE` date DEFAULT NULL,
+  `REPORT_WEEK_DAY` char(5) DEFAULT NULL,
+  `REAL_ATTENDANCE_NUM` smallint(5) unsigned DEFAULT NULL,
+  `LATE_ATTENDANCE_NUM` smallint(5) unsigned DEFAULT NULL,
+  `RATE` double(5,2) unsigned DEFAULT NULL,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+CREATE TABLE `hr_report_depthours` (
+  `ID` int auto_increment,
+  `GRP_ID` varchar(36) NOT NULL DEFAULT '',
+  `GRP_NAME` varchar(32) DEFAULT NULL,
+  `REPORT_DATE` date DEFAULT NULL,
+  `REPORT_WEEK_DAY` char(5) DEFAULT NULL,
+  `employee_num` smallint(5) unsigned DEFAULT NULL COMMENT '部门人数',
+  `hours` double(5,2) unsigned DEFAULT NULL COMMENT '部门总工时',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+CREATE TABLE `hr_report_emp_hours` (
+  `ID` int auto_increment,
+  `EMP_ID` varchar(36) NOT NULL DEFAULT '' COMMENT '员工ID',
+  `GRP_ID` varchar(36) NOT NULL DEFAULT '',
+  `GRP_NAME` varchar(32) DEFAULT NULL,
+  `REPORT_DATE` date DEFAULT NULL,
+  `REPORT_WEEK_DAY` char(5) DEFAULT NULL,
+  `hours` double(5,2) unsigned DEFAULT NULL COMMENT '总工时',
+  `late_time` int unsigned default 0 comment '迟到分钟数',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE `hr_report_emp_dismiss_rate` (
+  `ID` int auto_increment,
+  `GRP_ID` varchar(36) NOT NULL DEFAULT '',
+  `GRP_NAME` varchar(32) DEFAULT NULL,
+  `REPORT_DATE` date DEFAULT NULL,
+  `REPORT_WEEK_DAY` char(5) DEFAULT NULL,
+  `dimiss_num` smallint(5) unsigned default 0 comment '离职人数',
+  'employee_num' smallint(5) unsigned default 0 comment '部门在职人数',
+  `hours` double(5,2) unsigned DEFAULT NULL COMMENT '总工时',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+
+	<dynamic prepend=" ">
+				AND EMP_LEVEL NOT IN
+				<iterate property="EMP_LEVEL" open="(" close=")" conjunction=",">
+					#EMP_LEVEL[]#
+				</iterate>
+			</dynamic>
+
+
+

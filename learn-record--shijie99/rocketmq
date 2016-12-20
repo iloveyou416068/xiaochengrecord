@@ -1,0 +1,137 @@
+Open a terminal, go some somewhere you have permission to create file and folders, say ${HOME}
+
+git clone https://github.com/alibaba/RocketMQ.git
+cd RocketMQ
+bash install.sh
+Wait patiently till the building process completes. After building process completes, you should have a folder named devenv, containing all required files and libraries.
+
+Environment Variables
+
+Make sure the following environment variable is properly setup: JAVA_HOME
+
+Now setup ROCKETMQ_HOME environment variable:
+
+cd devenv
+
+echo "ROCKETMQ_HOME=`pwd`" >> ~/.bash_profile
+Make the new environment variable effecitve:
+
+source ~/.bash_profile
+Launch RocketMQ Name Server and Broker
+
+Assuming you are at devenv directory now.
+
+cd bin
+Start Name Server
+screen bash mqnamesrv
+If you see "The Name Server boot success. serializeType=JSON", this means name server starts successfully. Press Ctrl + A, then D to detach the session.
+
+Start Broker
+screen bash mqbroker -n localhost:9876
+If you see output like the following:
+
+The broker[lizhanhui-Lenovo, 172.30.30.233:10911] boot success. serializeType=JSON and name server is localhost:9876
+your broker then runs successfully.
+
+You may also check the log file to verify as below:
+
+tail -f ~/logs/rocketmqlogs/broker.log
+Check if there are heartbeat events similar to the sequel text:
+
+2016-07-29 12:19:11 INFO BrokerControllerScheduledThread1 - register broker to name server localhost:9876 OK
+Send & Receive Messages Before sending/receiving messages, we need to tell clients where the name servers are. RocketMQ provides multiple ways to achieve this. For simplicity, we use environment variable NAMESRV_ADDR
+
+export NAMESRV_ADDR=localhost:9876
+
+bash tools.sh com.alibaba.rocketmq.example.quickstart.Producer
+You will see a few hundreds messages are sent to brokers.
+
+To consume messages you just sent in the previous step,
+
+bash tools.sh com.alibaba.rocketmq.example.quickstart.Consumer
+
+
+---------------------------------------------
+
+
+rocketmq简要配置
+
+（1）创建目录
+
+mkdir   /home/rocket/alibaba-rocketmq/logs   #创建日志目录
+
+mkdir -p /home/rocket/alibaba-rocketmq/data/store/commitlog  #创建数据存储目录
+
+更改日志目录
+
+cd /home/rocket/alibaba-rocketmq/conf
+sed -i  's#${user.home}#${user.home}/alibaba-rocketmq#g' *.xml
+2）修改主配置
+
+vi ./conf/2m-2s-sync/broker-a.properties
+brokerClusterName=DefaultCluster
+brokerName=broker-a
+brokerId=0
+namesrvAddr=192.168.36.189:9876;192.168.36.54:9876
+defaultTopicQueueNums=4
+autoCreateTopicEnable=true
+autoCreateSubscriptionGroup=true
+listenPort=10911
+deleteWhen=04
+fileReservedTime=120
+mapedFileSizeCommitLog=1073741824
+mapedFileSizeConsumeQueue=50000000
+destroyMapedFileIntervalForcibly=120000
+redeleteHangedFileInterval=120000
+diskMaxUsedSpaceRatio=88
+storePathRootDir=/home/rocket/alibaba-rocketmq/data/store
+storePathCommitLog=/home/rocket/alibaba-rocketmq/data/store/commitlog
+maxMessageSize=65536
+flushCommitLogLeastPages=4
+flushConsumeQueueLeastPages=2
+flushCommitLogThoroughInterval=10000
+flushConsumeQueueThoroughInterval=60000
+checkTransactionMessageEnable=false
+sendMessageThreadPoolNums=128
+pullMessageThreadPoolNums=128
+brokerRole=SYNC_MASTER
+flushDiskType=ASYNC_FLUSH
+（3）修改备配置
+brokerClusterName=DefaultCluster
+brokerName=broker-a
+brokerId=1
+namesrvAddr=192.168.36.189:9876;192.168.36.54:9876
+defaultTopicQueueNums=4
+autoCreateTopicEnable=true
+autoCreateSubscriptionGroup=true
+listenPort=10911
+deleteWhen=04
+fileReservedTime=120
+mapedFileSizeCommitLog=1073741824
+mapedFileSizeConsumeQueue=50000000
+destroyMapedFileIntervalForcibly=120000
+redeleteHangedFileInterval=120000
+diskMaxUsedSpaceRatio=88
+storePathRootDir=/home/rocket/alibaba-rocketmq/data/store
+storePathCommitLog=/home/rocket/alibaba-rocketmq/data/store/commitlog
+maxMessageSize=65536
+flushCommitLogLeastPages=4
+flushConsumeQueueLeastPages=2
+flushCommitLogThoroughInterval=10000
+flushConsumeQueueThoroughInterval=60000
+checkTransactionMessageEnable=false
+sendMessageThreadPoolNums=128
+pullMessageThreadPoolNums=128
+brokerRole=SLAVE
+flushDiskType=ASYNC_FLUSH
+3.启动两台nameserver
+
+nohup ./bin/mqnamesrv >/dev/null 2>&1 &
+
+4.启动2台broker
+
+主：nohup ./bin/mqbroker -c ./conf/2m-2s-sync/broker-a.properties >/dev/null 2>&1 & 
+
+备：nohup ./bin/mqbroker -c ./conf/2m-2s-sync/broker-a-s.properties >/dev/null 2>&1 & 
+
+ok，配置启动完成。

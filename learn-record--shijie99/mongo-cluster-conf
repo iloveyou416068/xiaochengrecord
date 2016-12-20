@@ -1,0 +1,13 @@
+mongos --fork --logpath /data/shard/log/route.log --configdb configRelSet1/192.168.4.206:20000,192.168.4.207:20000,192.168.4.208:20000 --port 30000   --profile 1 --slowms 1000 --keyFile /data/mongodb/conf/cr-keyfile
+mongod --shardsvr --replSet s0 --port 20002 --dbpath /data/shard/s0 --logpath /data/shard/log/s0.log --fork --keyFile /data/mongodb/conf/cr-keyfile
+mongod --shardsvr --replSet s2 --port 20004 --dbpath /data/shard/s2 --logpath /data/shard/log/s2.log --fork --keyFile /data/mongodb/conf/cr-keyfile
+mongod --shardsvr --replSet s1 --port 20003 --dbpath /data/shard/s1 --logpath /data/shard/log/s1.log --fork --keyFile /data/mongodb/conf/cr-keyfile
+mongod --configsvr --replSet configRelSet1 --dbpath /data/shard/cofig --port 20000 --logpath /data/shard/log/config.log --fork --keyFile /data/mongodb/conf/cr-keyfile
+
+
+
+　db.runCommand({addShard:"shard1/serverA:27020,serverB:27020,serverC:27020"})
+
+　　db.runCommand({addShard:"shard2/serverA:27021,serverB:27021,serverC:27021"})
+
+　　db.printShardingStatus()

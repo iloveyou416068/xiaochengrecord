@@ -1,0 +1,11 @@
+/data/mongodb/bin/mongod --shardsvr --replSet shard1 --port 22001 --dbpath /data/shard/s0 --logpath /data/shard/log/shard1.log --fork --nojournal --oplogSize 10 --keyFile /data/key/r0
+
+
+ /data/mongodb/bin/mongod --shardsvr --replSet shard3 --port 22003 --dbpath /data/shard/s2 --logpath /data/shard/log/shard3.log --fork --nojournal --oplogSize 10 --keyFile /data/key/r2
+
+/data/mongodb/bin/mongod --shardsvr --replSet shard2 --port 22002 --dbpath /data/shard/s1 --logpath /data/shard/log/shard2.log --fork --nojournal --oplogSize 10 --keyFile /data/key/r1
+
+
+ /data/mongodb/bin/mongod --configsvr --dbpath /data/shard/config/ --port 30000 --logpath /data/shard/log/config.log --fork --keyFile /data/key/r3
+
+ /data/mongodb/bin/mongos --configdb 10.172.131.130:30000,10.172.135.219:30000,10.172.136.145:30000 --port 40000 --logpath /data/shard/log/route.log --fork --keyFile /data/key/r3

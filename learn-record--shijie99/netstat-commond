@@ -1,0 +1,3 @@
+netstat -tpln
+iptables -L -n
+chkconfig iptables off

@@ -1,0 +1,125 @@
+db.eval(function() {
+    var array = [];
+    var roombasics = db.room_ds.find({ds:'SUN_H'});
+    while(roombasics.hasNext()) {
+        var rb = roombasics.next();
+        var contain = 0;
+        var roomId=rb.roomId;
+     
+        
+       
+            
+        if (roomId.indexOf('R') > -1) {
+            
+               array.push(rb);
+        }
+       
+    
+    }
+    return array.length;
+    })
+
+
+
+    db.eval(
+function(collNum, limit, condition,ds){
+                   var array = [];
+                   var coll = db.white_list;
+                   var cu = coll.find().limit(100);
+                   while(cu.hasNext()) {
+                      var next = cu.next();
+                     if (next.ds.indexOf(ds)<=-1) {
+                           array.push(next);
+                      }
+                  var now = new Date();
+                   var exitTime = now.getTime() + 100; 
+                  while(true) {
+                       now = new Date();
+                      if (now.getTime() > exitTime)    break;
+                  }
+                  }
+                  return array;
+                }
+
+,{nolock:true}
+)
+
+
+db.runCommand({eval:
+    function(collNum, limit, condition,ds){
+                   var array = [];
+                   var coll = db.white_list;
+                   var cu = coll.find().limit(1000);
+                   while(cu.hasNext()) {
+                      var next = cu.next();
+                     if (next.ds.indexOf(ds)<=-1) {
+                           array.push(next);
+                      }
+                  var now = new Date();
+                   var exitTime = now.getTime() + 100; 
+                  while(true) {
+                       now = new Date();
+                      if (now.getTime() > exitTime)    break;
+                  }
+                  }
+                  return array;
+                }
+                ,nolock:true
+
+})
+
+
+///////////////////////
+//db.room_price_status.findAndModify({hotelId:"H00090093828"},{$set:{status:"open"}})
+
+//db.runCommand({findAndModify:"room_price_status",query:{hotelId:"H00090093828"},update:{$set:{status:"close"}}})
+
+//db.room_price_status.update({"priceId" : "P1424752726"},{$set:{status:"open"}})
+//db.room_price_status.find({priceId:"P1424752726"})
+//db.hotel_basic1.drop()
+//db.hotel_basic1.update({"hotelId":"H00121140558"},{$set:{phone:"1231"}})
+//db.room_basic.remove({associateDs:"BED_H"})
+//db.room_ds.remove({ds:"BED_H"})
+//db.room_basic.remove({"_id" : ObjectId("578461a2f525bd16d4b2c324")})
+
+//db.hotel_ds_0729.find({"dsCityCode":{$exists:true}}).forEach( 
+//function(x){ 
+//x.dsCityCode=""+x.dsCityCode; 
+//db.hotel_ds_0729.save(x); 
+//} 
+//); 
+//db.cid_manage.update({cid:{$exists:true}},{$set:{canPush:false}},{upsert:true,multi:true})
+//db.hotel_open.update({cid:{$exists:true}},{$set:{failureReason:"",aggregatedState:"INIT"}},{upsert:true,multi:true})
+//db.room_ctrip.update({hotelId:{$exists:true}},{$set:{aggregatedState:"TO_BE_PUSHED"}},{upsert:true,multi:true})
+//db.room_ctrip.aggregate([{$group:{_id:'$hotelId',count:{$sum:1}}}])
+
+db.room_ctrip.aggregate([{$group:{_id:'$hotelId',count:{$sum:1}}}])
+
+db.room_baisic_new.aggregate([{$group:{_id:{hotelId:{hotelId:'$hotelId'},score:{score:'$score'}}}},{$sort:{'_id.score':-1}}])
+db.room_baisic_new.aggregate([{$group:{_id:{hotelId:'$hotelId',score:'$score',count:{$sum:1}}}},{$sort:{'_id.score':-1,'_id.count':-1}}])
+
+
+
+///////////////////
+
+
+// elasticsearch 搜索
+//db.city_origin_city_lastest.find({$text:{$search:"\"baton\""}},{_id:0,ctripCityId:0,ctripCountryId:0,ctripProvinceId:0,score:{$meta:"textScore"}}).sort({score:{$meta:"textScore"}})
+db.ctrip_origin_city.find({$text:{$search:"t"}},{_id:0,ctripCityId:0,ctripCountryId:0,ctripProvinceId:0,score:{$meta:"textScore"}}).sort({score:{$meta:"textScore"}})
+
+
+
+db.room_ctrip.find().forEach(function(obj) {
+    obj.maxOcc= new NumberInt(obj.maxOcc);
+    db.room_ctrip.save(obj);
+});
+
+
+//db.room_static.createIndex({roomTypeName:"text"},{background:true})
+db.room_static.updateMany({},{$rename:{'language':'supportedLanguage'}})
+db.room_static_Zh.updateMany({},{$rename:{'language':'supportedLanguage'}})
+db.room_static_Zh.createIndex({roomTypeName:"text"},{language_override:"zhs"},{background:true})
+
+
+db.createCollection( "log", { capped: true, size: 100000 } )
+

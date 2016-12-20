@@ -1,0 +1,2 @@
+.gitignore
+git rm -rf --ignore-unmatch --cached 

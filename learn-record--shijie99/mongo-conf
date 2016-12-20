@@ -1,0 +1,32 @@
+dbpath = /usr/local/mongodb26/shard1 //数据库路径  
+directoryperdb = true //设置每个数据库将被保存在一个单独的目录  
+shardsvr = true //启动分片  
+replSet = shard1 //设置富本集的名字为shard1,replSet是让服务器知道在这个"shard1"副本集中还有别的机器  
+port = 20001 //端口号  
+oplogSize = 100 //复制日志大小 MB  
+pidfilepath = /usr/local/mongodb26/shard1/mongodb.pid //pid文件路径  
+logpath = /usr/local/mongodb26/log/shard1.log //日志路径  
+logappend = true //以追加方式写入  
+profile = 1 //数据库分析,1表示仅记录较慢的操作  
+slowms = 5 //认定为慢查询的时间设置,根mysql慢查询有点像  
+fork = true //以守护进程的方式运行，创建服务器进程  
+
+
+pidfilepath = /usr/local/mongodb26/configsvr/mongodb.pid  
+dbpath = /usr/local/mongodb26/configsvr  
+directoryperdb = true  
+configsvr = true //声明这是一个集群的config服务,默认端口27019，默认目录/data/configdb  
+replSet=configSvr
+port = 20000  
+logpath =/usr/local/mongodb26/log/configsvr.log  
+logappend = true  
+fork = true  
+
+configdb = configSvr/192.168.10.209:20000     //监听的配置服务器,只能有1个或者3个  
+port = 30000  
+chunkSize = 1 //单位 mb 生成环境请使用 100 或删除,删除后默认是64  
+logpath =/usr/local/mongodb26/log/mongos.log  
+logappend = true  
+fork = true  
+
+db._adminCommand("connPoolStats");

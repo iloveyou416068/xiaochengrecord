@@ -1,0 +1,280 @@
+
+Mongodb经验总结
+发表于 2016年5月12日 作者 wanghengbin
+截至3.2.6版本
+
+在mongodb里执行某些操作输出大段内容，无法查看目标信息时，可以先输出到文件再打开查看。
+1
+2
+3
+4
+#导出集群基本状态信息
+./mongo admin --port 20000 --eval 'sh.status(true);' > /tmp/mongo_out_shstatus
+#导出所有chunks数据，注意collection不能太大
+/alidata1/mongodb-3.2.3/bin/mongo config --port 20000 --eval 'db.chunks.find({jumbo:true}).toArray();' > tmpoutdd
+oplog会默认占用64位的实例5%的可用磁盘空间，如果设置过小并在数据库使用繁忙的时候创建新副本，会导致新副本集变secondary失败，查看日志会看到相关内容。
+mongos进程占用的内存在某些情况下可能会持续增长直到触发oom-killer，导致mongod躺枪，见/var/log/messages。
+各项配置中建议使用hostname代替ip，方便组件迁移。
+查看shard日志中执行时间大于1000毫秒的操作。
+1
+cat shard7.log | awk '{info=$NF; ms=(info+0); if(ms>1000 && ms!=30000) print $0; }' > tmpout2
+如果日志中提示存在大量jumbo块且需要手动切割执行以下命令。如果目标collection有chunk正在move，则不能立即sh.splitAt。
+1
+sh.splitAt("jelly_360.user_info",{_id:NumberLong("1509468385086838440") })
+当shard副本集无法自行投出Primary时，可以在Secondary上使用force参数强制执行reconfig来修改配置，去除失效节点。
+1
+rs.reconfig(cfg, {force: true})
+查看持有balancer锁的进程。
+1
+2
+use config
+db.locks.find({ _id: "balancer"}).pretty()
+查看活动中的持有锁的进程，通常用来查看chunk迁移情况。
+1
+2
+use config
+db.locks.find({state:2}).pretty()
+有时mongodb会出现这样或那样的问题，如balancer卡住、chunk移动受阻、CPU占用居高不下…实在没办法就重启shard进程。
+查看当前正在running的操作执行以下命令。
+1
+2
+3
+4
+5
+6
+7
+8
+db.currentOp().inprog.forEach(function(item){if(item.op!="query"){print(item.op,item.ns,item.client_s);}})
+db.currentOp().inprog.forEach(function(item){if(item.ns=="admin.$cmd"){printjson(item);}})
+# 把所有在等待锁的操作显示出来
+db.currentOp().inprog.forEach(function(item){if(item.waitingForLock)print(JSON.stringify(item))})
+# 停止查询超过1000秒的
+db.currentOp().inprog.forEach(function(item){if(item.secs_running > 1000 )db.killOp(item.opid)})
+# 根据log中的conn55387查询连接来自哪里（ip:port）
+db.currentOp(true).inprog.forEach(function(o){if(o.connectionId==55387) printjson(o)});
+创建索引时会触发global锁，导致整个数据库暂时不可用。
+Mongodb主要有以下三种日志：系统日志。
+系统日志，启动时指定日志路径，包含多种系统日志和慢查询记录。
+Journal日志，用于redo操作，保障mongo异常崩溃后数据不丢失。
+Oplog，用于主从副本集复制数据，保存在mongodb的local库的oplog.rs中。
+集群环境下可以通过changelog查看config变化。
+1
+2
+3
+use config
+db.changelog.find({"ns":"jelly_360.user_type_data"})
+db.changelog.distinct("what")
+Mongodb的系统日志需要手动切割，可以用crontab计划执行。
+1
+2
+3
+4
+# 每日0点切割
+0 0 * * * /alidata1/mongodb-3.2.3/bin/mongo admin --port 22001 --eval 'db.runCommand( { logRotate : 1 } );
+# 保留12天的日志
+10 0 * * * find /alidata1/log/mongodb/shard1/ -name "shard1.log*" -mtime +12 -delete
+Mongodb必须先对设置了开启分片，才能对其下的collection执行分片操作。不分片的collection会落在主分片上。
+1
+2
+3
+db.runCommand( { listshards : 1 } );
+db.runCommand( { "enablesharding" : "jelly_ios" } )
+db.runCommand( { shardcollection : "jelly_ios.user_info", key : {_id: "hashed"} } )
+将已经存在数据的未分片的collection修改为分片，需要先自行创建相关索引。
+1
+2
+db.people.createIndex( { _id: "hashed"} )
+db.runCommand( { shardcollection : "jelly_ios.user_info", key : {_id: "hashed"} } )
+分片相关，登录mongos的admin。
+1
+2
+3
+4
+5
+6
+7
+8
+#查看当前分片状态
+db.printShardingStatus();
+#查看当前分片配置
+db.runCommand( { listshards : 1 } );
+#增加新分片（建议使用hostname代替ip）
+db.runCommand( { addshard : "shard8/10.45.148.172:22008,10.174.8.228:22008,10.174.8.231:22008"});
+#移除分片
+db.runCommand( { removeShard : "shard8" } )
+副本集相关，登录shard（primary）的admin。
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+#查看当前副本集配置
+rs.conf()
+#配置副本集，priority成为primary的优先级（建议使用hostname代替ip）
+config = { _id:"shard1", members:[
+        {_id:0, host:"10.173.3.22:22001", priority:3},
+        {_id:1, host:"10.173.27.197:22001", priority:2},
+        {_id:2, host:"10.172.233.151:22001", priority:1, arbiterOnly:true}
+    ]
+}
+#第一次配置生效
+rs.initiate(config);
+#修改配置生效
+rs.reconfig(config);
+#查看副本情况
+rs.status()
+块（chunk）相关查询。登录mongos
+1
+2
+3
+4
+5
+6
+7
+#查看jumbo块
+use config
+db.chunks.find({jumbo:true})
+ 
+#查看某个collection的chunk在各分片的分布
+use jelly_ios
+db.user_type_data.getShardDistribution()
+如果chunk的大小超过设置的chunkSize或者chunk中的文档数量超过250000，则该块将无法移动（chunk too big to move），被标记为jumbo
+数据均衡会锁住数据、移动chunk，当访问量大时会因为争夺锁造成相互影响，所以建议设置自动balance时段。
+1
+2
+3
+4
+5
+6
+7
+#设置balancer
+use config
+db.settings.update(
+   { _id: "balancer" },
+   { $set: { activeWindow : { start: "2:00", stop: "6:00" } } },
+   { upsert: true }
+)
+生产环境配置优化：关闭atime，提升磁盘性能。
+1
+2
+3
+4
+5
+6
+7
+8
+9
+#备份/etc/fstab
+cp /etc/fstab /etc/fstab.original
+#编辑/etc/fstab，增加noatime
+# <file system>        <dir>         <type>    <options>             <dump> <pass>
+/dev/sda1              /             ext4      defaults,noatime      0      1
+/dev/sda2              none          swap      defaults              0      0
+/dev/sda3              /home         ext4      defaults,noatime      0      2
+#重启linux
+reboot
+生产环境配置优化：增加mongodb运行用户的最大进程数（max user processes）。
+1
+2
+3
+4
+5
+6
+7
+#查看
+ulimit -a
+#修改
+vi /etc/security/limits.d/20-nproc.conf
+#内容
+*          soft    nproc     65535
+root       soft    nproc     unlimited
+生产环境配置优化：关闭透明大页（Transparent Huge Pages）。
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+#查看
+cat /sys/kernel/mm/transparent_hugepage/enabled
+cat /sys/kernel/mm/transparent_hugepage/defrag
+#编辑/etc/tuned/no-thp/tuned.conf
+mkdir /etc/tuned/no-thp
+vi /etc/tuned/no-thp/tuned.conf
+#内容
+[main]
+include=virtual-guest
+ 
+[vm]
+transparent_hugepages=never
+#生效
+tuned-adm profile no-thp
+1
+2
+3
+#或者临时关闭
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+echo never > /sys/kernel/mm/transparent_hugepage/defrag
+生产环境配置优化：运行在Non-Uniform Access Memory（NUMA）的系统上。
+1
+2
+3
+4
+#启动时增加numactl --interleave=all
+numactl --interleave=all ${MONGODB_HOME}/bin/mongod --config conf/mongodb.conf
+#修改内核参数
+echo 0 > /proc/sys/vm/zone_reclaim_mode
+通过mongo shell执行javascript脚本。
+1
+/opt/mongodb-3.2.6/bin/mongo 127.0.0.1:20000/jelly_cs --quiet list_collections_size.js
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+function getReadableFileSizeString(fileSizeInBytes) {
+    var i = -1;
+    var byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
+    do {
+        fileSizeInBytes = fileSizeInBytes / 1024;
+        i++;
+    } while (fileSizeInBytes > 1024);
+ 
+    return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i];
+};
+var collectionNames = db.getCollectionNames(), stats = [];
+collectionNames.forEach(function (n) { stats.push(db[n].stats()); });
+stats = stats.sort(function(a, b) { return b['size'] - a['size']; });
+for (var i in stats) { print(stats[i]['ns'] + ": " + getReadableFileSizeString(stats[i]['size']) + " (" + getReadableFileSizeString(stats[i]['storageSize']) + ")"); }
+
+
+
+
+

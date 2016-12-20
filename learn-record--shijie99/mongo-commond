@@ -1,0 +1,14 @@
+mongoimport --host mongodb1.example.net --port 37017 --username user --password pass --collection --file
+mongo --host m2.example.net --port 27017
+
+ mongoimport --db hotel  --port 10001 --username mongodb --password shijie99hotel --collection tmpstdroom --type csv --headerline  --file std_room.csv --authenticationDatabase admin
+
+
+ mongoimport  --port=10001 -umongodb  -pshijie99hotel  -d hotel -c ctrip_room_mapping -f hotelName,hotelId,ctripRoomId,roomName,maxOccup,roomType --type=csv --file=ctrip_room_mapping.csv --authenticationDatabase admin
+
+ // 每秒访问mongo请求数
+ mongostat --port=40000 -umongodb -pshijie99hotel --authenticationDatabase admin
+
+ mongotop --port 20003  15
+
+ db.runCommand({fsync:1,async:true});

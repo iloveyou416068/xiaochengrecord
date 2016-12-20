@@ -1,0 +1,88 @@
+sudo lsof -i:27017
+netstat -tunlp |grep 27017
+
+
+ps -ef|grep LOCAL=NO|grep -v grep|cut -c 9-15|xargs kill -9
+
+运行这条命令将会杀掉所有含有关键字"LOCAL=NO"的进程，是不是很方便？
+
+下面将这条命令作一下简单说明：
+
+管道符"|"用来隔开两个命令，管道符左边命令的输出会作为管道符右边命令的输入。
+
+"ps -ef" 是linux里查看所有进程的命令。这时检索出的进程将作为下一条命令"grep LOCAL=NO"的输入。
+
+"grep LOCAL=NO" 的输出结果是，所有含有关键字"LOCAL=NO"的进程。
+
+"grep -v grep" 是在列出的进程中去除含有关键字"grep"的进程。
+
+"cut -c 9-15" 是截取输入行的第9个字符到第15个字符，而这正好是进程号PID。
+
+"xargs kill -9" 中的 xargs 命令是用来把前面命令的输出结果（PID）作为"kill -9"命令的参数，并执行该命令。"kill -9"会强行杀掉指定进程。
+
+其它类似的情况，只需要修改"grep LOCAL=NO"中的关键字部分就可以了。
+
+
+
+tar  -zcvf   压缩文件名.tar.gz   被压缩文件名
+tar  -zxvf   压缩文件名.tar.gz
+
+
+开启redis端口，修改防火墙配置文件
+    vi /etc/sysconfig/iptables  
+
+加入端口配置
+    -A RH-Firewall-1-INPUT -m state --state NEW -m tcp -p tcp --dport 6379 -j ACCEPT  
+
+curl -O https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-3.2.7.tgz
+
+tar -zxvf mongodb-linux-x86_64-3.2.7.tgz
+
+
+linux：
+whereis java
+which java （java执行路径）
+echo $JAVA_HOME
+echo $PATH
+
+find / -name java_home 
+
+
+下面是配置linux的环境变量：(记得source ~/.bash_profile)
+. 修改/etc/profile文件 （全局所有用户）
+
+
+vi 此文件/etc/profile
+在profile文件末尾加入：
+export JAVA_HOME=/usr/share/jdk1.6.0_20
+export PATH=$JAVA_HOME/bin:$PATH
+export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+.修改.bash_profile文件 （某个用户权限使用这些环境变量）
+.bash_profile文件末尾加入：
+
+
+export JAVA_HOME=/usr/share/jdk1.6.0_20
+export PATH=$JAVA_HOME/bin:$PATH
+export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+.shell终端执行下列命令： （临时用）
+export JAVA_HOME=/usr/share/jdk1.6.0_14
+export PATH=$JAVA_HOME/bin:$PATH
+export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+
+
+cat /proc/version
+
+
+查看进程所以线程：
+ps mp 6648 -o THREAD,tid
+pstree -p 6648
+
+ 查看端口连接数
+ netstat -nat|grep -i "30000"|wc -l
+ 统计httpd协议连接数
+ ps -ef|grep httpd|wc -l
+ 统计已连接上的，状态为“established
+ netstat -na|grep ESTABLISHED|wc -l
+
+ 查看有多少个进程数：
+ ps aux|grep httpd|wc -l

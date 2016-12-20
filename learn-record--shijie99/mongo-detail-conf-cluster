@@ -1,0 +1,151 @@
+详细配置步骤如下：
+
+ 1、配置shard1用到复制集 s1：
+
+　　在serverA上：mongod --replSet s1 --port 27020 --dbpath=/data/mongo/s1_1/db --logpath=/data/mongo/s1_1/log/mongo.log --logappend --fork
+
+　　在serverB上：mongod --replSet s1 --port 27020 --dbpath=/data/mongo/s1_2/db --logpath=/data/mongo/s1_2/log/mongo.log --logappend --fork
+
+　　在serverC上：mongod --replSet s1 --port 27020 --dbpath=/data/mongo/s1_3/db --logpath=/data/mongo/s1_3/log/mongo.log --logappend --fork
+
+　　连接三个节点的任一个初始化复制集s1　
+
+　　>use admin
+
+　　>config = {_id:'s1',members:[{_id:0,host:'serverA:27020',priority:1},{_id:1,host:'serverB:27020'},{_id:2,host:'serverC:27020'}]}
+
+　　>rs.initiate(config)
+
+　　>rs.status()
+
+　　另外对复制集s1的所有节点都执行如下命令确保所有节点都能分担读取的压力
+
+　　>db.getMongo().setSlaveOk();
+
+ 2、配置shard2用到复制集 s2：
+
+　　在serverA上：mongod --replSet s2 --port 27021 --dbpath=/data/mongo/s2_1/db --logpath=/data/mongo/s2_1/log/mongo.log --logappend --fork
+
+　　在serverB上：mongod --replSet s2 --port 27021 --dbpath=/data/mongo/s2_2/db --logpath=/data/mongo/s2_2/log/mongo.log --logappend --fork
+
+　　在serverC上：mongod --replSet s2 --port 27021 --dbpath=/data/mongo/s2_3/db --logpath=/data/mongo/s2_3/log/mongo.log --logappend --fork　
+
+　　连接三个节点的任一个初始化复制集s2　
+rs.reconfig(config, {force: true})
+　　>use admin
+
+　　>config = {_id:'s2',members:[{_id:0,host:'serverA:27021'},{_id:1,host:'serverB:27021',priority:1},{_id:2,host:'serverC:27021'}]}
+
+　　>rs.initiate(config)
+
+　　>rs.status()
+
+　　另外对复制集s2的所有节点都执行如下命令确保所有节点都能分担读取的压力
+
+　　>db.getMongo().setSlaveOk();
+
+ 3、配置三台Config Server：
+
+　　在serverA上：mongod  -fork --configsvr --dbpath /data/mongo/config/db --port 27018 --logpath /data/mongo/config/log/mongo.log --fork
+
+　　在serverB上：mongod  -fork --configsvr --dbpath /data/mongo/config/db --port 27018 --logpath /data/mongo/config/log/mongo.log --fork
+
+　　在serverC上：mongod  -fork --configsvr --dbpath /data/mongo/config/db --port 27018 --logpath /data/mongo/config/log/mongo.log --fork
+
+ 4、配置三台Route Server：
+
+　　在serverA上：mongos -fork --logpath /data/mongo/route/log/mongo.log --configdb ServerA:27018,ServerB:27018,ServerC:27018 --port 27017
+
+　　在serverB上：mongos -fork --logpath /data/mongo/route/log/mongo.log --configdb ServerA:27018,ServerB:27018,ServerC:27018 --port 27017
+
+　　在serverC上：mongos -fork --logpath /data/mongo/route/log/mongo.log --configdb ServerA:27018,ServerB:27018,ServerC:27018 --port 27017
+
+ 5、配置Shard Cluster：
+
+　　连接任一mongos进程执行以下命令：
+
+　　use admin
+
+　　db.runCommand({addShard:"shard1/serverA:27020,serverB:27020,serverC:27020"})
+
+　　db.runCommand({addShard:"shard2/serverA:27021,serverB:27021,serverC:27021"})
+
+　　db.printShardingStatus()
+
+6、激活数据库及集合的分片功能：
+
+　　连接任一mongos进程执行以下命令：
+
+　　db.runCommand({enablesharding:"testdb"})
+
+　　db.runCommand({shardcollection:"testdb.collection_test",key:{_id:1}})
+
+7、登录mongos添加用户：
+
+    use admin
+
+    db.addUser("<user>","<password>")
+
+　 db.addUser("<user>","<password>",true) //添加只读用户
+
+8、关闭三台机器的全部mongod,mongos：
+
+　　sudo killall mongod
+
+　　sudo killall mongos
+
+9、生成keyfile：(每个进程的key file都保持一致)
+
+　　openssl rand -base64 753 >keyfile
+
+　　将生成的keyfile 拷贝到mongod/mongos 进程对应的文件夹
+
+　　并执行语句更改权限:sudo chmod 600 keyfile
+
+　　使用--keyFile参数指定前面生成的keyfile文件，重启三台机器全部mongod,mongos进程　
+
+　　在serverA上：mongod --replSet s1 --port 27020 --dbpath=/data/mongo/s1_1/db --logpath=/data/mongo/s1_1/log/mongo.log --logappend --fork --keyFile  /data/mongo/s1_1/keyfile
+
+　　在serverB上：mongod --replSet s1 --port 27020 --dbpath=/data/mongo/s1_2/db --logpath=/data/mongo/s1_2/log/mongo.log --logappend --fork --keyFile  /data/mongo/s1_2/keyfile
+
+　　在serverC上：mongod --replSet s1 --port 27020 --dbpath=/data/mongo/s1_3/db --logpath=/data/mongo/s1_3/log/mongo.log --logappend --fork --keyFile  /data/mongo/s1_3/keyfile
+
+　　
+
+　　在serverA上：mongod --replSet s2 --port 27021 --dbpath=/data/mongo/s2_1/db --logpath=/data/mongo/s2_1/log/mongo.log --logappend --fork --keyFile  /data/mongo/s2_1/keyfile
+
+　　在serverB上：mongod --replSet s2 --port 27021 --dbpath=/data/mongo/s2_2/db --logpath=/data/mongo/s2_2/log/mongo.log --logappend --fork --keyFile  /data/mongo/s2_2/keyfile
+
+　　在serverC上：mongod --replSet s2 --port 27021 --dbpath=/data/mongo/s2_3/db --logpath=/data/mongo/s2_3/log/mongo.log --logappend --fork --keyFile  /data/mongo/s2_3/keyfile
+
+　　
+
+　　在serverA上：mongod  -fork --configsvr --dbpath /data/mongo/config/db --port 27018 --logpath /data/mongo/config/log/mongo.log --fork --keyFile  /data/mongo/config/keyfile
+
+　　在serverB上：mongod  -fork --configsvr --dbpath /data/mongo/config/db --port 27018 --logpath /data/mongo/config/log/mongo.log --fork --keyFile  /data/mongo/config/keyfile
+
+　　在serverC上：mongod  -fork --configsvr --dbpath /data/mongo/config/db --port 27018 --logpath /data/mongo/config/log/mongo.log --fork --keyFile  /data/mongo/config/keyfile
+
+ 
+
+　　在serverA上：mongos -fork --logpath /data/mongo/route/log/mongo.log --configdb ServerA:27018,ServerB:27018,ServerC:27018 --port 27017 --keyFile  /data/mongo/route/keyfile
+
+　　在serverB上：mongos -fork --logpath /data/mongo/route/log/mongo.log --configdb ServerA:27018,ServerB:27018,ServerC:27018 --port 27017 --keyFile  /data/mongo/route/keyfile
+
+　　在serverC上：mongos -fork --logpath /data/mongo/route/log/mongo.log --configdb ServerA:27018,ServerB:27018,ServerC:27018 --port 27017 --keyFile  /data/mongo/route/keyfile
+
+　　完毕!
+
+ 
+ //db.room_price_status.findAndModify({hotelId:"H00090093828"},{$set:{status:"open"}})
+
+//db.runCommand({findAndModify:"room_price_status",query:{hotelId:"H00090093828"},update:{$set:{status:"close"}}})
+
+//db.room_price_status.update({"priceId" : "P1424752726"},{$set:{status:"open"}})
+db.room_price_status.find({priceId:"P1424752726"})
+
+db.runCommand({ setParameter : 1, releaseConnectionsAfterResponse : true })
+
+mongos --setParameter "releaseConnectionsAfterResponse=true" --configdb ... 
+
+ mongostat --host 127.0.0.1:40000  -u mongodb -p shijie99hotel  --authenticationDatabase admin

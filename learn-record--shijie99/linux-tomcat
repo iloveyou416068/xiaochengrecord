@@ -1,0 +1,250 @@
+Linux查看连接数，并发数
+
+tomcat 6的Connector配置如下 
+Xml代码  收藏代码
+<Connector port="8080" protocol="HTTP/1.1"  
+               connectionTimeout="20000"  
+               redirectPort="8443"  
+               maxThreads="800" acceptCount="1000"/>  
+
+
+
+其中最后两个参数意义如下： 
+
+maxThreads：tomcat起动的最大线程数，即同时处理的任务个数，默认值为200 
+
+acceptCount：当tomcat起动的线程数达到最大时，接受排队的请求个数，默认值为100 
+
+
+
+这两个值如何起作用，请看下面三种情况 
+
+情况1：接受一个请求，此时tomcat起动的线程数没有到达maxThreads，tomcat会起动一个线程来处理此请求。 
+
+情况2：接受一个请求，此时tomcat起动的线程数已经到达maxThreads，tomcat会把此请求放入等待队列，等待空闲线程。 
+
+情况3：接受一个请求，此时tomcat起动的线程数已经到达maxThreads，等待队列中的请求个数也达到了acceptCount，此时tomcat会直接拒绝此次请求，返回connection refused 
+
+maxThreads如何配置 
+
+一般的服务器操作都包括量方面：1计算（主要消耗cpu），2等待（io、数据库等） 
+
+第一种极端情况，如果我们的操作是纯粹的计算，那么系统响应时间的主要限制就是cpu的运算能力，此时maxThreads应该尽量设的小，降低同一时间内争抢cpu的线程个数，可以提高计算效率，提高系统的整体处理能力。 
+
+第二种极端情况，如果我们的操作纯粹是IO或者数据库，那么响应时间的主要限制就变为等待外部资源，此时maxThreads应该尽量设的大，这样才能提高同时处理请求的个数，从而提高系统整体的处理能力。此情况下因为tomcat同时处理的请求量会比较大，所以需要关注一下tomcat的虚拟机内存设置和linux的open file限制。 
+
+我在测试时遇到一个问题，maxThreads我设置的比较大比如3000，当服务的线程数大到一定程度时，一般是2000出头，单次请求的响应时间就会急剧的增加， 
+
+百思不得其解这是为什么，四处寻求答案无果，最后我总结的原因可能是cpu在线程切换时消耗的时间随着线程数量的增加越来越大， 
+
+cpu把大多数时间都用来在这2000多个线程直接切换上了，当然cpu就没有时间来处理我们的程序了。 
+
+以前一直简单的认为多线程=高效率。。其实多线程本身并不能提高cpu效率，线程过多反而会降低cpu效率。 
+
+当cpu核心数<线程数时，cpu就需要在多个线程直接来回切换，以保证每个线程都会获得cpu时间，即通常我们说的并发执行。 
+
+所以maxThreads的配置绝对不是越大越好。 
+
+现实应用中，我们的操作都会包含以上两种类型（计算、等待），所以maxThreads的配置并没有一个最优值，一定要根据具体情况来配置。 
+
+最好的做法是：在不断测试的基础上，不断调整、优化，才能得到最合理的配置。 
+
+acceptCount的配置，我一般是设置的跟maxThreads一样大，这个值应该是主要根据应用的访问峰值与平均值来权衡配置的。 
+
+如果设的较小，可以保证接受的请求较快相应，但是超出的请求可能就直接被拒绝 
+
+如果设的较大，可能就会出现大量的请求超时的情况，因为我们系统的处理能力是一定的。 
+1、查看apache当前并发访问数：
+　　
+Bat代码  收藏代码
+netstat -an | grep ESTABLISHED | wc -l  
+　　 
+对比httpd.conf中MaxClients的数字差距多少。 
+　　 
+2、查看有多少个进程数： 
+　　
+Bat代码  收藏代码
+ps aux|grep httpd|wc -l  
+
+　　 
+3、可以使用如下参数查看数据 
+　　server-status?auto 
+　　
+Bat代码  收藏代码
+#ps -ef|grep httpd|wc -l  
+
+　　1388 
+　　统计httpd进程数，连个请求会启动一个进程，使用于Apache服务器。 
+　　表示Apache能够处理1388个并发请求，这个值Apache可根据负载情况自动调整。 
+　　
+Bat代码  收藏代码
+#netstat -nat|grep -i "80"|wc -l  
+
+　　4341 
+　　netstat -an会打印系统当前网络链接状态，而grep -i "80"是用来提取与80端口有关的连接的，wc -l进行连接数统计。  www.2cto.com  
+　　最终返回的数字就是当前所有80端口的请求总数。 
+　　
+Bat代码  收藏代码
+#netstat -na|grep ESTABLISHED|wc -l  
+
+　　376 
+　　netstat -an会打印系统当前网络链接状态，而grep ESTABLISHED 提取出已建立连接的信息。 然后wc -l统计。 
+　　最终返回的数字就是当前所有80端口的已建立连接的总数。 
+　　
+Bat代码  收藏代码
+netstat -nat||grep ESTABLISHED|wc  
+
+    - 可查看所有建立连接的详细记录 
+
+　　查看Apache的并发请求数及其TCP连接状态： 
+　　Linux命令： 
+　　
+Bat代码  收藏代码
+netstat -n | awk '/^tcp/ {++S[$NF]} END {for（a in S） print a, S[a]}'  
+
+　　返回结果示例： 
+　　LAST_ACK 5 
+　　SYN_RECV 30 
+　　ESTABLISHED 1597 
+　　FIN_WAIT1 51 
+　　FIN_WAIT2 504 
+　　TIME_WAIT 1057 
+　　其中的 
+　　SYN_RECV表示正在等待处理的请求数； 
+　　ESTABLISHED表示正常数据传输状态； 
+　　TIME_WAIT表示处理完毕，等待超时结束的请求数。（这个参数还不太懂，为啥是等待超时结束，请大神指教） 
+
+
+Linux 大规模请求服务器连接数相关设置
+[viewuser@~]$ ulimit -a
+core file size (blocks, -c) 0 #coredump 文件大小
+data seg size (kbytes, -d) unlimited
+scheduling priority (-e) 0
+file size (blocks, -f) unlimited
+pending signals (-i) 255622
+max locked memory (kbytes, -l) 64
+max memory size (kbytes, -m) unlimited
+open files (-n) 1024 #打开文件数量，root账户无限制
+pipe size (512 bytes, -p) 8
+POSIX message queues (bytes, -q) 819200
+real-time priority (-r) 0
+stack size (kbytes, -s) 8192
+cpu time (seconds, -t) unlimited
+max user processes (-u) 4096 #root用户本项是无限
+virtual memory (kbytes, -v) unlimited
+file locks (-x) unlimited
+设置要求：假设我们要设置为200W最大打开文件描述符
+
+1. 修改 nr_open 限制 （用途：能够配置nofile最大数）
+
+cat /proc/sys/fs/nr_open
+Linux 内核 2.6.25 以前，在内核里面宏定义是1024*1024，最大只能是100w（1048576），所以不要设置更大的值，如果Linux内核大于 2.6.25 则可以设置更大值。
+设置方法：
+sudo bash -c 'echo 2000000 > /proc/sys/fs/nr_open'
+注意：只有修改了 nr_open 限制，才能修改下面的限制。
+
+
+2. 打开文件描述符限制：修改 limits.conf 的nofile软硬打开文件限制（用途：tcp连接数）
+
+文件位置：/etc/security/limits.conf
+查找 nofile ，如果没有，则在自己最后加上：
+2.6.25 及以前内核设置为100W：
+* soft nofile 1000000
+* hard nofile 1000000
+
+2.6.25 以后版本内核可以设置为200W：
+* soft nofile 2000000
+* hard nofile 2000000
+
+设置后保存本文件。（本操作必须重启才生效，如果无法重启，会无法生效，不确定是否使用 /sbin/sysctl -p 是否可以直接生效）
+
+
+3. 打开进程限制：修改 limits.conf 中的nproc限制 （用途：进程数）
+
+说明：如果你对进程总数量没有特殊要求，可以不修改本选项，如果你是一个高性能多进程的server，需要很多进程来处理，那么可以修改本选项。
+ulimit -a 里可以看到 max user processes 如果值是比较大的，可以不用设置 nproc 项。
+配置文件：/etc/security/limits.d/20-nproc.conf （RHEL 7/CentOS 7）
+* soft nproc 4096
+root soft nproc unlimited
+
+就是root无限（实际root用户限制是：255622），其他非root用户是4096个进程。
+
+说明：
+硬限制表明soft限制中所能设定的最大值。 soft限制指的是当前系统生效的设置值。 hard限制值可以被普通用户降低。但是不能增加。 soft限制不能设置的比hard限制更高。 只有root用户才能够增加hard限制值。
+当增加文件限制描述，可以简单的把当前值双倍。 例子如下， 如果你要提高默认值1024， 最好提高到2048， 如果还要继续增加， 就需要设置成4096。
+
+
+4. 修改 file-max 选项 （用途：可分配文件句柄数目）
+
+file-max 价值：指定了可以分配的文件句柄的最大数目（可以使用 /proc/sys/fs/file-nr 文件查看到当前已经使用的文件句柄和总句柄数。）
+
+(1) 临时生效：
+文件路径：/proc/sys/fs/file-max
+cat /proc/sys/fs/file-max
+3252210
+如果要修改，直接覆盖文件：（比如改成200w）
+sudo echo 2000000 > /proc/sys/fs/file-max
+注意：如果你想每次启动都自动执行上面的命令，可以在系统启动配置文件/etc/rc.local里面添加一句命令：（跟永久生效差不多）
+echo 2000000 > /proc/sys/fs/file-max
+或者直接Shell全搞定：
+echo "echo 2000000 > /proc/sys/fs/file-max" >> /etc/rc.local
+(2) 永久生效：
+修改配置文件，文件位置：/etc/sysctl.conf
+打开配置文件到最末尾，如果配置文件里没有则可以直接添加：
+sudo echo "fs.file-max = 2000000" >>/etc/sysctl.conf
+配置文件生效：sudo /sbin/sysctl -p
+
+
+5. 修改TCP等相关选项
+
+配置文件：/etc/sysctl.conf
+修改选项：
+net.core.somaxconn = 2048
+net.core.rmem_default = 262144
+net.core.wmem_default = 262144
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.ipv4.tcp_rmem = 4096 4096 16777216
+net.ipv4.tcp_wmem = 4096 4096 16777216
+net.ipv4.tcp_mem = 786432 2097152 3145728
+net.ipv4.tcp_max_syn_backlog = 16384
+net.core.netdev_max_backlog = 20000
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_max_syn_backlog = 16384
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_tw_recycle = 1
+net.ipv4.tcp_max_orphans = 131072
+配置文件生效：sudo /sbin/sysctl -p
+
+以上选项也可以直接给 /proc/sys/net/ 目录下面按照各个选项可以直接使用 echo VALUE > /proc/sys/net/core/wmem_max 来直接修改内存临时值生效。
+
+主要看这几项：
+net.ipv4.tcp_rmem 用来配置读缓冲的大小，三个值，第一个是这个读缓冲的最小值，第三个是最大值，中间的是默认值。我们可以在程序中修改读缓冲的大小，但是不能超过最小与最大。为了使每个socket所使用的内存数最小，我这里设置默认值为4096。
+net.ipv4.tcp_wmem 用来配置写缓冲的大小。读缓冲与写缓冲在大小，直接影响到socket在内核中内存的占用。
+net.ipv4.tcp_mem 则是配置tcp的内存大小，其单位是页，而不是字节。当超过第二个值时，TCP进入 pressure模式，此时TCP尝试稳定其内存的使用，当小于第一个值时，就退出pressure模式。当内存占用超过第三个值时，TCP就拒绝分配 socket了，查看dmesg，会打出很多的日志“TCP: too many of orphaned sockets”。
+net.ipv4.tcp_max_orphans 这个值也要设置一下，这个值表示系统所能处理不属于任何进程的 socket数量，当我们需要快速建立大量连接时，就需要关注下这个值了。当不属于任何进程的socket的数量大于这个值时，dmesg就会看 到”too many of orphaned sockets”。
+
+注意：如果是客户端程序，为了更好的访问server程序不是卡在端口分配上，建议把客户端的端口（port_range）范围开大一些：
+修改文件：/etc/sysctl.conf
+net.ipv4.ip_local_port_range = 1024 65535
+
+配置生效：sudo /sbin/sysctl -p
+如果是客户端，其他文件打开限制等可以参考上面的来设置。
+
+
+6. 其他一些配置
+
+(1) 打开core文件
+
+如果为了观察程序是否正常，出现问题后生成相应映像文件，可以开启coredump相关的操作，可以打开：（非必须，如果线上环境，担心影响稳定性，可以考虑不开启）
+配置文件：/etc/security/limits.conf
+修改配置文件：
+增加：
+* soft core 102400
+* hard core 2048003
+
+建议设置为无限大小：
+* soft core unlimited
+* hard core unlimited
+然后重启机器生效（不确定是否可以使用 /sbin/sysctl -p 生效），使用： ulimit -a 或 ulimit -c 查看结果，后续如果程序出现栈溢出等都会生成coredump文件，方便用gdb等追查问题原因。
+

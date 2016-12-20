@@ -1,0 +1,150 @@
+mongo config
+
+shard server:
+systemLog:
+     destination: file
+     path: /data/mongo-shard/log/shard1/shard1.log
+     logAppend: true
+
+storage:
+   journal:
+      enabled: true
+   dbPath: /data/mongo-shard/db/shard1
+
+processManagement:
+   fork: true
+
+replication:
+   oplogSizeMB: 10
+   replSetName: s0
+   
+sharding:
+   clusterRole: shardsvr
+   
+net:
+   #bindIp: 127.0.0.1
+   port: 20001
+
+operationProfiling:
+  slowOpThresholdMs: 100
+  mode: slowOp
+
+config:
+systemLog:
+     destination: file
+     path: /data/mongo-shard/log/config/config.log
+     logAppend: true
+
+storage:
+   journal:
+      enabled: true
+   dbPath: /data/mongo-shard/db/config
+   engine: wiredTiger
+   wiredTiger:
+      engineConfig:
+         cacheSizeGB: <number> //  
+         journalCompressor: <string>
+         directoryForIndexes: <boolean>
+      collectionConfig:
+         blockCompressor: <string>
+      indexConfig:
+         prefixCompression: <boolean>
+
+processManagement:
+   fork: true
+
+replication:
+   oplogSizeMB: 10
+   replSetName: configRelSet1
+   
+sharding:
+   clusterRole: configsvr
+   
+net:
+   #bindIp: 127.0.0.1
+   port: 20000
+
+operationProfiling:
+  slowOpThresholdMs: 100
+  mode: slowOp
+
+
+route:
+
+systemLog:
+     destination: file
+     path: /data/mongo-shard/log/route/route.log
+     logAppend: true
+
+processManagement:
+   fork: true
+   
+sharding:
+   configDB: configRelSet1/192.168.4.206:20000,192.168.4.207:20000,192.168.4.208:20000
+  
+   
+net:
+   #bindIp: 127.0.0.1
+   port: 30000
+   maxIncomingConnections: 2000
+setParameter:
+  cursorTimeoutMillis: 300000
+
+
+
+
+问题：
+
+发现mongodb无法连接，查看mongodb日志，出现大量的如下报错：
+
+[initandlisten] connection refused because too many open connections: 819
+mongodb的连接数到达819后，就无法增加，所以无法连接上去。
+
+ 
+
+分析解决：
+
+1、maxConns 限制
+
+默认情况下，在Linux系统中，mongodb的最大连接数为819。
+
+可以修改mongodb的最大连接数，修改其配置文件mongod.conf：
+
+maxConns=20000  #官方指定，mongodb最大连接数设置，不能超过20000
+重启mongodb服务，让配置生效。
+
+ 
+
+2、ulimit 限制
+
+如果调大了maxConns，还是出现 too many open connections 的报错，也可能跟系统的ulimit限制有关。
+
+Linux系统默认每个进程的文件句柄限制open files 为1024，这数值一般过小，需要调大。
+
+复制代码
+查看系统当前所有的limit信息
+# ulimit -a
+core file size          (blocks, -c) 0
+data seg size           (kbytes, -d) unlimited
+scheduling priority             (-e) 0
+file size               (blocks, -f) unlimited
+pending signals                 (-i) 7672
+max locked memory       (kbytes, -l) 64
+max memory size         (kbytes, -m) unlimited
+open files                      (-n) 1024
+pipe size            (512 bytes, -p) 8
+POSIX message queues     (bytes, -q) 819200
+real-time priority              (-r) 0
+stack size              (kbytes, -s) 10240
+cpu time               (seconds, -t) unlimited
+max user processes              (-u) 1024
+virtual memory          (kbytes, -v) unlimited
+file locks                      (-x) unlimited
+复制代码
+使用 ulimit -n 修改 open files 限制：(当前session生效)
+
+# ulimit -n 102400
+更改系统限制，修改 /etc/security/limits.conf ，添加如下行: （永久生效）
+
+* soft nofile 102400
+* hard nofile 102400

@@ -1,0 +1,11 @@
+
+打包
+-c   创建war包
+-v   显示过程信息
+-f   指定 JAR文件名，通常这个参数是必须的
+-M  不产生所有项的清单（MANIFEST〕文件，此参数会忽略 -m参数
+-0   这个是阿拉伯数字，只打包不压缩的意思
+
+jar -xvf project.war /project_a
+
+jar -xvf project.war
